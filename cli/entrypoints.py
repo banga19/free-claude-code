@@ -179,12 +179,18 @@ def _claude_child_env(
         for key, value in base_env.items()
         if not key.startswith("ANTHROPIC_")
     }
-    env.pop("ANTHROPIC_API_KEY", None)
+    if token := settings.anthropic_auth_token.strip():
+        env["ANTHROPIC_API_KEY"] = token
+    else:
+        env.pop("ANTHROPIC_API_KEY", None)
     env["ANTHROPIC_BASE_URL"] = local_proxy_root_url(settings)
     env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
     env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "190000"
+    env["CLAUDE_CODE_ALLOW_DISPOSABLE_SESSION"] = "1"
     if token := settings.anthropic_auth_token.strip():
         env["ANTHROPIC_AUTH_TOKEN"] = token
+    if claude_flow_bin := settings.claude_flow_bin.strip():
+        env["CLAUDE_FLOW_BIN"] = claude_flow_bin
     return env
 
 
@@ -208,9 +214,29 @@ def _preflight_proxy(proxy_root_url: str) -> str | None:
     return None
 
 
-def launch_claude(argv: Sequence[str] | None = None) -> None:
-    """Launch Claude Code with Free Claude Code proxy environment variables."""
+def _resolve_claude_command(settings: Settings) -> tuple[str, str]:
+    """Resolve which Claude launcher to use.
 
+    Search order:
+    1. ``settings.claude_flow_bin`` if configured
+    2. ``settings.claude_cli_bin`` (default ``claude``)
+
+    Returns ``(command_path, launcher_name)``.
+    Raises ``SystemExit(127)`` if none are found.
+    """
+    candidates: list[tuple[str, str]] = []
+    if claude_flow_bin := settings.claude_flow_bin.strip():
+        candidates.append((claude_flow_bin, claude_flow_bin))
+    candidates.append((settings.claude_cli_bin, settings.claude_cli_bin))
+
+    for candidate_name, launcher_name in candidates:
+        if command := shutil.which(candidate_name):
+            return command, launcher_name
+
+    raise SystemExit(127)
+
+
+def launch_claude(argv: Sequence[str] | None = None) -> None:
     settings = get_settings()
     proxy_root_url = local_proxy_root_url(settings)
     if error := _preflight_proxy(proxy_root_url):
@@ -222,20 +248,21 @@ def launch_claude(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(1)
 
     args = list(sys.argv[1:] if argv is None else argv)
-    claude_command = shutil.which(settings.claude_cli_bin)
-    if claude_command is None:
-        print(
-            f"Could not find Claude Code command: {settings.claude_cli_bin}",
-            file=sys.stderr,
-        )
-        print(
-            "Install Claude Code with: npm install -g @anthropic-ai/claude-code",
-            file=sys.stderr,
-        )
-        raise SystemExit(127)
+    try:
+        claude_command, launcher_name = _resolve_claude_command(settings)
+    except SystemExit as exc:
+        if exc.code == 127:
+            print(
+                "No Claude Code launcher found on PATH.\n"
+                "Install claude or claude-flow, or set CLAUDE_FLOW_BIN in your .env.",
+                file=sys.stderr,
+            )
+        raise
 
     command = [claude_command, *args]
     env = _claude_child_env(settings, os.environ)
+    if launcher_name not in {settings.claude_cli_bin, "claude"}:
+        env.setdefault("CLAUDE_FLOW_BIN", launcher_name)
     process: subprocess.Popen[bytes] | None = None
     try:
         process = subprocess.Popen(command, env=env)
@@ -244,7 +271,7 @@ def launch_claude(argv: Sequence[str] | None = None) -> None:
         return_code = process.wait()
     except FileNotFoundError:
         print(
-            f"Could not find Claude Code command: {settings.claude_cli_bin}",
+            f"Could not find Claude Code command: {launcher_name}",
             file=sys.stderr,
         )
         print(

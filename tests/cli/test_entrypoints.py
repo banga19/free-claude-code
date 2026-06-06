@@ -14,11 +14,13 @@ def _launcher_settings(
     *,
     port: int = 8082,
     token: str = "freecc",
+    claude_flow_bin: str = "",
 ) -> Settings:
     return Settings.model_construct(
         host="0.0.0.0",
         port=port,
         anthropic_auth_token=token,
+        claude_flow_bin=claude_flow_bin,
     )
 
 
@@ -403,28 +405,106 @@ def test_launch_claude_exits_when_command_cannot_be_resolved(
         launch_claude([])
 
     assert exc_info.value.code == 127
-    popen.assert_not_called()
     captured = capsys.readouterr()
-    assert "Could not find Claude Code command: claude" in captured.err
-    assert "npm install -g @anthropic-ai/claude-code" in captured.err
+    assert "No Claude Code launcher found on PATH" in captured.err
+    popen.assert_not_called()
 
 
-def test_launch_claude_unreachable_proxy_exits_with_hint(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_launch_claude_uses_claude_flow_when_available() -> None:
     from cli.entrypoints import launch_claude
 
-    settings = _launcher_settings(port=9393)
+    settings = _launcher_settings(
+        port=9191, token="proxy-token", claude_flow_bin=" claude-flow "
+    )
+
     with (
         patch("cli.entrypoints.get_settings", return_value=settings),
-        patch("cli.entrypoints._preflight_proxy", return_value="connection refused"),
-        patch("cli.entrypoints.subprocess.run") as run,
+        patch("cli.entrypoints._preflight_proxy", return_value=None),
+        patch(
+            "cli.entrypoints.shutil.which",
+            side_effect=lambda name: (
+                f"/usr/bin/{name}" if name in ("claude-flow", "claude") else None
+            ),
+        ) as mock_which,
+        patch("cli.entrypoints.subprocess.Popen") as popen,
+        patch("cli.entrypoints.register_pid") as register_pid,
+        patch("cli.entrypoints.unregister_pid") as unregister_pid,
         pytest.raises(SystemExit) as exc_info,
     ):
-        launch_claude([])
+        process = popen.return_value
+        process.pid = 12345
+        process.wait.return_value = 0
+        launch_claude(["--model", "sonnet"])
 
-    assert exc_info.value.code == 1
-    run.assert_not_called()
-    captured = capsys.readouterr()
-    assert "http://127.0.0.1:9393" in captured.err
-    assert "fcc-server" in captured.err
+    assert exc_info.value.code == 0
+    popen.assert_called_once()
+    assert popen.call_args.args[0][0] == "/usr/bin/claude-flow"
+    assert mock_which.call_args_list[0].args[0] == "claude-flow"
+    register_pid.assert_called_once_with(12345)
+    unregister_pid.assert_called_once_with(12345)
+
+
+def test_launch_claude_falls_back_to_claude_when_flow_missing() -> None:
+    from cli.entrypoints import launch_claude
+
+    settings = _launcher_settings(
+        port=9191, token="proxy-token", claude_flow_bin="claude-flow"
+    )
+
+    with (
+        patch("cli.entrypoints.get_settings", return_value=settings),
+        patch("cli.entrypoints._preflight_proxy", return_value=None),
+        patch(
+            "cli.entrypoints.shutil.which",
+            side_effect=lambda name: "/usr/bin/claude" if name == "claude" else None,
+        ) as mock_which,
+        patch("cli.entrypoints.subprocess.Popen") as popen,
+        patch("cli.entrypoints.register_pid") as register_pid,
+        patch("cli.entrypoints.unregister_pid") as unregister_pid,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        process = popen.return_value
+        process.pid = 12345
+        process.wait.return_value = 0
+        launch_claude(["--model", "sonnet"])
+
+    assert exc_info.value.code == 0
+    popen.assert_called_once()
+    assert popen.call_args.args[0][0] == "/usr/bin/claude"
+    assert mock_which.call_args_list[0].args[0] == "claude-flow"
+    assert mock_which.call_args_list[1].args[0] == "claude"
+    register_pid.assert_called_once_with(12345)
+    unregister_pid.assert_called_once_with(12345)
+
+
+def test_claude_child_env_includes_claude_flow_bin_when_set() -> None:
+    from cli.entrypoints import _claude_child_env
+
+    env = _claude_child_env(
+        _launcher_settings(claude_flow_bin=" claude-flow "),
+        {"ANTHROPIC_API_KEY": "official-key"},
+    )
+
+    assert env["CLAUDE_FLOW_BIN"] == "claude-flow"
+
+
+def test_claude_child_env_omits_claude_flow_bin_when_empty() -> None:
+    from cli.entrypoints import _claude_child_env
+
+    env = _claude_child_env(
+        _launcher_settings(claude_flow_bin=""),
+        {"ANTHROPIC_API_KEY": "official-key"},
+    )
+
+    assert "CLAUDE_FLOW_BIN" not in env
+
+
+def test_claude_child_env_sets_disposable_session_by_default() -> None:
+    from cli.entrypoints import _claude_child_env
+
+    env = _claude_child_env(
+        _launcher_settings(),
+        {"ANTHROPIC_API_KEY": "official-key"},
+    )
+
+    assert env.get("CLAUDE_CODE_ALLOW_DISPOSABLE_SESSION") == "1"

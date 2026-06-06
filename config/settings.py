@@ -303,6 +303,11 @@ class Settings(BaseSettings):
         default="", validation_alias="ANTHROPIC_AUTH_TOKEN"
     )
 
+    # Claude Code launcher integration (e.g. `claude-flow` for free-tier relay).
+    # When non-empty, fcc-claude resolves this binary first and falls back
+    # to the standard Claude Code CLI only if `CLAUDE_FLOW_BIN` is not on PATH.
+    claude_flow_bin: str = Field(default="", validation_alias="CLAUDE_FLOW_BIN")
+
     # Handle empty strings for optional string fields
     @field_validator(
         "telegram_bot_token",
@@ -322,6 +327,13 @@ class Settings(BaseSettings):
         if v == "":
             return None
         return v
+
+    @field_validator("claude_flow_bin", mode="before")
+    @classmethod
+    def normalize_claude_flow_bin(cls, v: Any) -> Any:
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return ""
+        return v.strip() if isinstance(v, str) else v
 
     @field_validator("max_message_log_entries_per_chat", mode="before")
     @classmethod

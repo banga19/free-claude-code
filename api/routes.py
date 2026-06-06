@@ -238,6 +238,51 @@ async def list_models(
     return _build_models_list_response(settings, provider_registry)
 
 
+CLAUDEFLOW_ORGS = {
+    "id": "org_selfhost",
+    "name": "Free Claude Code Proxy",
+    "plan": "proxy",
+    "created_at": "1970-01-01T00:00:00Z",
+    "role": "owner",
+}
+
+
+@router.get("/v1/organizations")
+async def list_organizations_v1():
+    return {"data": [CLAUDEFLOW_ORGS]}
+
+
+@router.get("/v1/me")
+async def current_user_v1():
+    return {
+        "id": "user_selfhost",
+        "email": "proxy@free-claude-code.local",
+        "full_name": "Free Claude Code User",
+        "organizations": {
+            "data": [CLAUDEFLOW_ORGS],
+            "has_more": False,
+        },
+    }
+
+
+@router.get("/organizations")
+async def list_organizations():
+    return {"data": [CLAUDEFLOW_ORGS]}
+
+
+@router.get("/users/me")
+async def current_user():
+    return {
+        "id": "user_selfhost",
+        "email": "proxy@free-claude-code.local",
+        "full_name": "Free Claude Code User",
+        "organizations": {
+            "data": [CLAUDEFLOW_ORGS],
+            "has_more": False,
+        },
+    }
+
+
 @router.post("/stop")
 async def stop_cli(request: Request, _auth=Depends(require_api_key)):
     """Stop all CLI sessions and pending tasks."""

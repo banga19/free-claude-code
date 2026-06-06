@@ -73,22 +73,22 @@ run_uv_installer() {
     fi
 }
 
-add_path_entry() {
+add_to_path() {
     [ -n "$1" ] || return 0
     case ":$PATH:" in
-        *":$1:"*) ;;
+        *":$1:"*) return 0 ;;
         *) PATH="$1:$PATH" ;;
     esac
 }
 
 add_uv_to_path() {
     if [ -n "${XDG_BIN_HOME:-}" ]; then
-        add_path_entry "$XDG_BIN_HOME"
+        add_to_path "$XDG_BIN_HOME"
     fi
 
     if [ -n "${HOME:-}" ]; then
-        add_path_entry "$HOME/.local/bin"
-        add_path_entry "$HOME/.cargo/bin"
+        add_to_path "$HOME/.local/bin"
+        add_to_path "$HOME/.cargo/bin"
     fi
 
     export PATH
