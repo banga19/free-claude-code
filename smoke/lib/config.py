@@ -159,6 +159,7 @@ class SmokeConfig:
     def provider_models(self) -> list[ProviderModel]:
         candidates = (
             ("MODEL", self.settings.model),
+            ("MODEL_FABLE", self.settings.model_fable),
             ("MODEL_OPUS", self.settings.model_opus),
             ("MODEL_SONNET", self.settings.model_sonnet),
             ("MODEL_HAIKU", self.settings.model_haiku),

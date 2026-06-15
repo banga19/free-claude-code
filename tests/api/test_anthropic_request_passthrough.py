@@ -9,6 +9,7 @@ from api.models.anthropic import (
     Message,
     MessagesRequest,
     SystemContent,
+    ThinkingConfig,
     Tool,
 )
 from config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS
@@ -200,3 +201,35 @@ def test_native_body_preserves_context_and_output_config() -> None:
     )
     assert body["context_management"] == raw["context_management"]
     assert body["output_config"] == raw["output_config"]
+
+
+def test_native_body_keeps_adaptive_thinking_when_client_disables_it() -> None:
+    req = MessagesRequest(
+        model="claude-fable-5",
+        original_model="claude-fable-5",
+        max_tokens=20,
+        messages=[Message(role="user", content="x")],
+        thinking=ThinkingConfig(type="disabled", enabled=False),
+    )
+    body = build_base_native_anthropic_request_body(
+        req,
+        default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        thinking_enabled=True,
+    )
+    assert body["thinking"] == {"type": "enabled"}
+
+
+def test_native_body_drops_adaptive_thinking_budget() -> None:
+    req = MessagesRequest(
+        model="claude-fable-5",
+        original_model="claude-fable-5",
+        max_tokens=20,
+        messages=[Message(role="user", content="x")],
+        thinking=ThinkingConfig(type="enabled", budget_tokens=4096),
+    )
+    body = build_base_native_anthropic_request_body(
+        req,
+        default_max_tokens=ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS,
+        thinking_enabled=True,
+    )
+    assert body["thinking"] == {"type": "enabled"}

@@ -26,6 +26,7 @@ from providers.wafer import WaferProvider
 def _settings(
     *,
     model: str = "nvidia_nim/nim-model",
+    model_fable: str | None = None,
     model_opus: str | None = None,
     model_sonnet: str | None = None,
     model_haiku: str | None = None,
@@ -38,6 +39,7 @@ def _settings(
 ) -> Settings:
     return Settings.model_construct(
         model=model,
+        model_fable=model_fable,
         model_opus=model_opus,
         model_sonnet=model_sonnet,
         model_haiku=model_haiku,

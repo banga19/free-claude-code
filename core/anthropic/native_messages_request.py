@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from common.anthropic_model_names import is_adaptive_thinking_model
+
 _REQUEST_FIELDS = (
     "model",
     "messages",
@@ -199,13 +201,15 @@ def _normalize_system_prompt_for_openrouter(system: Any) -> Any:
     return "\n\n".join(text_parts).strip() if text_parts else system
 
 
-def _apply_openrouter_reasoning_policy(body: dict[str, Any], thinking_cfg: Any) -> None:
+def _apply_openrouter_reasoning_policy(
+    body: dict[str, Any], thinking_cfg: Any, *, adaptive_thinking: bool
+) -> None:
     """Map Anthropic thinking controls onto OpenRouter reasoning controls."""
     reasoning = body.setdefault("reasoning", {"enabled": True})
     if not isinstance(reasoning, dict):
         return
     reasoning.setdefault("enabled", True)
-    if not isinstance(thinking_cfg, dict):
+    if adaptive_thinking or not isinstance(thinking_cfg, dict):
         return
     budget_tokens = thinking_cfg.get("budget_tokens")
     if isinstance(budget_tokens, int):
@@ -227,9 +231,13 @@ def build_base_native_anthropic_request_body(
         thinking_cfg = body.pop("thinking")
         if thinking_enabled and isinstance(thinking_cfg, dict):
             thinking_payload: dict[str, Any] = {"type": "enabled"}
-            budget_tokens = thinking_cfg.get("budget_tokens")
-            if isinstance(budget_tokens, int):
-                thinking_payload["budget_tokens"] = budget_tokens
+            model_name = getattr(request, "original_model", None)
+            if not (
+                isinstance(model_name, str) and is_adaptive_thinking_model(model_name)
+            ):
+                budget_tokens = thinking_cfg.get("budget_tokens")
+                if isinstance(budget_tokens, int):
+                    thinking_payload["budget_tokens"] = budget_tokens
             body["thinking"] = thinking_payload
 
     if "max_tokens" not in body:
@@ -275,6 +283,15 @@ def build_openrouter_native_request_body(
         body["max_tokens"] = default_max_tokens
 
     if thinking_enabled:
-        _apply_openrouter_reasoning_policy(body, thinking_cfg)
+        _apply_openrouter_reasoning_policy(
+            body,
+            thinking_cfg,
+            adaptive_thinking=isinstance(
+                getattr(request_data, "original_model", None), str
+            )
+            and is_adaptive_thinking_model(
+                str(getattr(request_data, "original_model", ""))
+            ),
+        )
 
     return body

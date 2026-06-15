@@ -10,11 +10,13 @@ from providers.registry import ProviderRegistry
 def _settings(
     *,
     model: str = "deepseek/deepseek-chat",
+    model_fable: str | None = None,
     model_opus: str | None = "open_router/anthropic/claude-opus",
     model_haiku: str | None = "deepseek/deepseek-chat",
 ) -> Settings:
     return Settings.model_construct(
         model=model,
+        model_fable=model_fable,
         model_opus=model_opus,
         model_sonnet=None,
         model_haiku=model_haiku,
@@ -63,6 +65,11 @@ def test_models_list_includes_configured_refs_cached_provider_models_and_aliases
         display_names["claude-3-freecc-no-thinking/open_router/meta/llama-3.3"]
         == "open_router/meta/llama-3.3 (no thinking)"
     )
+    assert "claude-fable-5" in ids
+    assert "claude-opus-4-8" in ids
+    assert "claude-sonnet-4-6" in ids
+    assert "claude-haiku-4-5-20251001" in ids
+    assert "claude-haiku-4-5" in ids
     assert "claude-sonnet-4-20250514" in ids
     assert data["first_id"] == ids[0]
     assert data["last_id"] == ids[-1]
@@ -166,4 +173,7 @@ def test_models_list_works_without_provider_registry():
         "anthropic/open_router/anthropic/claude-opus",
         "claude-3-freecc-no-thinking/open_router/anthropic/claude-opus",
     ]
+    assert "claude-fable-5" in ids
+    assert "claude-opus-4-8" in ids
+    assert "claude-sonnet-4-6" in ids
     assert "claude-sonnet-4-20250514" in ids

@@ -416,6 +416,13 @@ FIELDS: tuple[ConfigFieldSpec, ...] = (
         description="Fallback provider/model route for all Claude model names.",
     ),
     ConfigFieldSpec(
+        "MODEL_FABLE",
+        "Fable Override",
+        "models",
+        settings_attr="model_fable",
+        description="Optional provider/model route for Claude Fable 5 requests.",
+    ),
+    ConfigFieldSpec(
         "MODEL_OPUS",
         "Opus Override",
         "models",

@@ -11,6 +11,8 @@ from dotenv import dotenv_values
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from common.anthropic_model_names import is_adaptive_thinking_model
+
 from .constants import HTTP_CONNECT_TIMEOUT_DEFAULT
 from .nim import NimSettings
 from .paths import default_claude_workspace_path, managed_env_path
@@ -154,6 +156,7 @@ class Settings(BaseSettings):
 
     # Per-model overrides (optional, falls back to MODEL)
     # Each can use a different provider
+    model_fable: str | None = Field(default=None, validation_alias="MODEL_FABLE")
     model_opus: str | None = Field(default=None, validation_alias="MODEL_OPUS")
     model_sonnet: str | None = Field(default=None, validation_alias="MODEL_SONNET")
     model_haiku: str | None = Field(default=None, validation_alias="MODEL_HAIKU")
@@ -314,6 +317,7 @@ class Settings(BaseSettings):
         "allowed_telegram_user_id",
         "discord_bot_token",
         "allowed_discord_channels",
+        "model_fable",
         "model_opus",
         "model_sonnet",
         "model_haiku",
@@ -409,7 +413,9 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator("model", "model_opus", "model_sonnet", "model_haiku")
+    @field_validator(
+        "model", "model_fable", "model_opus", "model_sonnet", "model_haiku"
+    )
     @classmethod
     def validate_model_format(cls, v: str | None) -> str | None:
         if v is None:
@@ -470,6 +476,8 @@ class Settings(BaseSettings):
         returns the model-specific override if configured, otherwise the fallback MODEL.
         """
         name_lower = claude_model_name.lower()
+        if "fable" in name_lower and self.model_fable is not None:
+            return self.model_fable
         if "opus" in name_lower and self.model_opus is not None:
             return self.model_opus
         if "haiku" in name_lower and self.model_haiku is not None:
@@ -482,6 +490,7 @@ class Settings(BaseSettings):
         """Return unique configured chat provider/model refs with source env keys."""
         candidates = (
             ("MODEL", self.model),
+            ("MODEL_FABLE", self.model_fable),
             ("MODEL_OPUS", self.model_opus),
             ("MODEL_SONNET", self.model_sonnet),
             ("MODEL_HAIKU", self.model_haiku),
@@ -505,6 +514,8 @@ class Settings(BaseSettings):
     def resolve_thinking(self, claude_model_name: str) -> bool:
         """Resolve whether thinking is enabled for an incoming Claude model name."""
         name_lower = claude_model_name.lower()
+        if is_adaptive_thinking_model(claude_model_name):
+            return True
         if "opus" in name_lower and self.enable_opus_thinking is not None:
             return self.enable_opus_thinking
         if "haiku" in name_lower and self.enable_haiku_thinking is not None:

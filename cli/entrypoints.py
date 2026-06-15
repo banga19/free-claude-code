@@ -180,15 +180,13 @@ def _claude_child_env(
         if not key.startswith("ANTHROPIC_")
     }
     if token := settings.anthropic_auth_token.strip():
-        env["ANTHROPIC_API_KEY"] = token
+        env["ANTHROPIC_AUTH_TOKEN"] = token
     else:
-        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("ANTHROPIC_AUTH_TOKEN", None)
     env["ANTHROPIC_BASE_URL"] = local_proxy_root_url(settings)
     env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
     env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "190000"
     env["CLAUDE_CODE_ALLOW_DISPOSABLE_SESSION"] = "1"
-    if token := settings.anthropic_auth_token.strip():
-        env["ANTHROPIC_AUTH_TOKEN"] = token
     if claude_flow_bin := settings.claude_flow_bin.strip():
         env["CLAUDE_FLOW_BIN"] = claude_flow_bin
     return env

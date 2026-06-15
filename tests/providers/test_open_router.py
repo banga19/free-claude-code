@@ -194,6 +194,19 @@ def test_build_request_body_omits_reasoning_when_native_thinking_disabled(
     assert "reasoning" not in body
 
 
+def test_build_request_body_keeps_adaptive_thinking_when_native_disabled(
+    open_router_provider,
+):
+    req = MockRequest(
+        original_model="claude-fable-5",
+        thinking={"type": "disabled", "enabled": False},
+    )
+
+    body = open_router_provider._build_request_body(req)
+
+    assert body["reasoning"] == {"enabled": True}
+
+
 def test_build_request_body_maps_thinking_budget_to_reasoning_max_tokens(
     open_router_provider,
 ):

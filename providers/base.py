@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from common.anthropic_model_names import is_adaptive_thinking_model
 from config.constants import HTTP_CONNECT_TIMEOUT_DEFAULT
 from providers.model_listing import ProviderModelInfo, model_infos_from_ids
 
@@ -48,13 +49,19 @@ class BaseProvider(ABC):
             else thinking_enabled
         )
         request_enabled = True
+        model_name = getattr(request, "original_model", None) or getattr(
+            request, "model", None
+        )
+        adaptive_model = isinstance(model_name, str) and is_adaptive_thinking_model(
+            model_name
+        )
         if thinking is not None:
             thinking_type = (
                 thinking.get("type")
                 if isinstance(thinking, dict)
                 else getattr(thinking, "type", None)
             )
-            if thinking_type == "disabled":
+            if thinking_type == "disabled" and not adaptive_model:
                 request_enabled = False
 
             enabled = (
@@ -62,7 +69,7 @@ class BaseProvider(ABC):
                 if isinstance(thinking, dict)
                 else getattr(thinking, "enabled", None)
             )
-            if enabled is not None:
+            if enabled is not None and not adaptive_model:
                 request_enabled = bool(enabled)
         return config_enabled and request_enabled
 

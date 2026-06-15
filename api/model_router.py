@@ -111,6 +111,8 @@ class ModelRouter:
         """Return an internal routed request context."""
         resolved = self.resolve(request.model)
         routed = request.model_copy(deep=True)
+        routed.original_model = request.model
+        routed.resolved_provider_model = resolved.provider_model_ref
         routed.model = resolved.provider_model
         return RoutedMessagesRequest(request=routed, resolved=resolved)
 
@@ -122,4 +124,6 @@ class ModelRouter:
         routed = request.model_copy(
             update={"model": resolved.provider_model}, deep=True
         )
+        routed.original_model = request.model
+        routed.resolved_provider_model = resolved.provider_model_ref
         return RoutedTokenCountRequest(request=routed, resolved=resolved)

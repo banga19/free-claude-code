@@ -11,6 +11,7 @@ from config.settings import Settings
 def settings():
     settings = Settings()
     settings.model = "nvidia_nim/fallback-model"
+    settings.model_fable = None
     settings.model_opus = None
     settings.model_sonnet = None
     settings.model_haiku = None
@@ -29,6 +30,27 @@ def test_model_router_resolves_default_model(settings):
     assert resolved.provider_model == "fallback-model"
     assert resolved.provider_model_ref == "nvidia_nim/fallback-model"
     assert resolved.thinking_enabled is True
+
+
+def test_model_router_applies_fable_override(settings):
+    settings.model_fable = "open_router/anthropic/claude-fable-5"
+
+    request = MessagesRequest(
+        model="claude-fable-5",
+        max_tokens=100,
+        messages=[Message(role="user", content="hello")],
+    )
+    routed = ModelRouter(settings).resolve_messages_request(request)
+
+    assert routed.request.model == "anthropic/claude-fable-5"
+    assert routed.request.original_model == "claude-fable-5"
+    assert (
+        routed.request.resolved_provider_model == "open_router/anthropic/claude-fable-5"
+    )
+    assert routed.resolved.provider_model_ref == "open_router/anthropic/claude-fable-5"
+    assert routed.resolved.original_model == "claude-fable-5"
+    assert routed.resolved.thinking_enabled is True
+    assert request.model == "claude-fable-5"
 
 
 def test_model_router_applies_opus_override(settings):

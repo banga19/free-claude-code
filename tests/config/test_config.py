@@ -283,6 +283,7 @@ class TestSettings:
         assert settings.enable_opus_thinking is True
         assert settings.enable_sonnet_thinking is False
         assert settings.enable_haiku_thinking is False
+        assert settings.resolve_thinking("claude-fable-5") is True
 
     def test_empty_per_model_thinking_inherits_model_default(self, monkeypatch):
         """Blank per-model thinking env vars are treated as unset."""
@@ -592,6 +593,7 @@ class TestPerModelMapping:
         from config.settings import Settings
 
         s = Settings()
+        assert s.model_fable is None
         assert s.model_opus is None
         assert s.model_sonnet is None
         assert s.model_haiku is None
@@ -604,7 +606,17 @@ class TestPerModelMapping:
         s = Settings()
         assert s.model_opus == "open_router/deepseek/deepseek-r1"
 
-    @pytest.mark.parametrize("env_var", ["MODEL_OPUS", "MODEL_SONNET", "MODEL_HAIKU"])
+    def test_model_fable_from_env(self, monkeypatch):
+        """MODEL_FABLE env var is loaded."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("MODEL_FABLE", "open_router/anthropic/claude-fable-5")
+        s = Settings()
+        assert s.model_fable == "open_router/anthropic/claude-fable-5"
+
+    @pytest.mark.parametrize(
+        "env_var", ["MODEL_FABLE", "MODEL_OPUS", "MODEL_SONNET", "MODEL_HAIKU"]
+    )
     def test_empty_model_override_env_is_unset(self, monkeypatch, env_var):
         """Empty per-model override env vars are treated as unset."""
         from config.settings import Settings
@@ -677,6 +689,14 @@ class TestPerModelMapping:
         with pytest.raises(ValidationError, match="Invalid provider"):
             Settings()
 
+    def test_model_fable_invalid_provider_raises(self, monkeypatch):
+        """MODEL_FABLE with invalid provider prefix raises ValidationError."""
+        from config.settings import Settings
+
+        monkeypatch.setenv("MODEL_FABLE", "bad_provider/some-model")
+        with pytest.raises(ValidationError, match="Invalid provider"):
+            Settings()
+
     def test_model_opus_no_slash_raises(self, monkeypatch):
         """MODEL_OPUS without provider prefix raises ValidationError."""
         from config.settings import Settings
@@ -692,6 +712,19 @@ class TestPerModelMapping:
         monkeypatch.setenv("MODEL_HAIKU", "invalid/model")
         with pytest.raises(ValidationError, match="Invalid provider"):
             Settings()
+
+    def test_resolve_model_fable_override(self):
+        """resolve_model returns model_fable for Fable model names."""
+        from config.settings import Settings
+
+        s = Settings()
+        s.model_fable = "open_router/anthropic/claude-fable-5"
+        assert (
+            s.resolve_model("claude-fable-5") == "open_router/anthropic/claude-fable-5"
+        )
+        assert (
+            s.resolve_model("Claude-FABLE-5") == "open_router/anthropic/claude-fable-5"
+        )
 
     def test_resolve_model_opus_override(self):
         """resolve_model returns model_opus for opus model names."""
@@ -742,6 +775,7 @@ class TestPerModelMapping:
         s.model = "nvidia_nim/fallback-model"
         # No model overrides set
         assert s.resolve_model("claude-opus-4-20250514") == "nvidia_nim/fallback-model"
+        assert s.resolve_model("claude-fable-5") == "nvidia_nim/fallback-model"
         assert (
             s.resolve_model("claude-sonnet-4-20250514") == "nvidia_nim/fallback-model"
         )
@@ -828,6 +862,7 @@ class TestPerModelMapping:
         monkeypatch.setenv("WHISPER_MODEL", "openai/whisper-large-v3")
         s = Settings()
         s.model = "nvidia_nim/fallback"
+        s.model_fable = "open_router/anthropic/claude-fable-5"
         s.model_opus = "open_router/anthropic/claude-opus"
         s.model_sonnet = "nvidia_nim/fallback"
         s.model_haiku = None
@@ -836,11 +871,15 @@ class TestPerModelMapping:
 
         assert [ref.model_ref for ref in refs] == [
             "nvidia_nim/fallback",
+            "open_router/anthropic/claude-fable-5",
             "open_router/anthropic/claude-opus",
         ]
         assert refs[0].provider_id == "nvidia_nim"
         assert refs[0].model_id == "fallback"
         assert refs[0].sources == ("MODEL", "MODEL_SONNET")
         assert refs[1].provider_id == "open_router"
-        assert refs[1].model_id == "anthropic/claude-opus"
-        assert refs[1].sources == ("MODEL_OPUS",)
+        assert refs[1].model_id == "anthropic/claude-fable-5"
+        assert refs[1].sources == ("MODEL_FABLE",)
+        assert refs[2].provider_id == "open_router"
+        assert refs[2].model_id == "anthropic/claude-opus"
+        assert refs[2].sources == ("MODEL_OPUS",)
