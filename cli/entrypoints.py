@@ -247,7 +247,11 @@ def launch_claude(argv: Sequence[str] | None = None) -> None:
         print("Start it in another terminal with: fcc-server", file=sys.stderr)
         raise SystemExit(1)
 
-    args = list(sys.argv[1:] if argv is None else argv)
+    args = [
+        arg
+        for arg in (sys.argv[1:] if argv is None else argv)
+        if arg not in {"/release-notes", "--release-notes"}
+    ]
     try:
         claude_command, launcher_name = _resolve_claude_command(settings)
     except SystemExit as exc:

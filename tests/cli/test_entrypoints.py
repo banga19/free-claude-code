@@ -307,9 +307,9 @@ def test_claude_child_env_targets_current_proxy_config() -> None:
     assert env["PATH"] == "keep"
     assert env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:9090"
     assert env["ANTHROPIC_AUTH_TOKEN"] == "proxy-token"
+    assert env["ANTHROPIC_API_KEY"] == "proxy-token"
     assert env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] == "1"
     assert env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] == "190000"
-    assert "ANTHROPIC_API_KEY" not in env
 
 
 def test_claude_child_env_removes_blank_configured_auth_token() -> None:
@@ -362,6 +362,34 @@ def test_launch_claude_passes_args_and_child_env(
     assert child_env["KEEP_ME"] == "yes"
     register_pid.assert_called_once_with(12345)
     unregister_pid.assert_called_once_with(12345)
+
+
+def test_launch_claude_strips_release_notes_flags() -> None:
+    from cli.entrypoints import launch_claude
+
+    settings = _launcher_settings(port=9191, token="proxy-token")
+
+    with (
+        patch("cli.entrypoints.get_settings", return_value=settings),
+        patch("cli.entrypoints._preflight_proxy", return_value=None),
+        patch("cli.entrypoints.shutil.which", return_value="resolved-claude.cmd"),
+        patch("cli.entrypoints.subprocess.Popen") as popen,
+        patch("cli.entrypoints.register_pid") as _r,
+        patch("cli.entrypoints.unregister_pid") as _u,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        process = popen.return_value
+        process.pid = 12345
+        process.wait.return_value = 0
+        launch_claude(["--model", "sonnet", "/release-notes", "--release-notes"])
+
+    assert exc_info.value.code == 0
+    popen.assert_called_once()
+    assert "/release-notes" not in popen.call_args.args[0]
+    assert "--release-notes" not in popen.call_args.args[0]
+    assert popen.call_args.args[0] == ["resolved-claude.cmd", "--model", "sonnet"]
+    _r.assert_called_once_with(12345)
+    _u.assert_called_once_with(12345)
 
 
 def test_launch_claude_keyboard_interrupt_kills_child_tree() -> None:
