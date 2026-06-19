@@ -50,6 +50,7 @@ Free Claude Code routes Anthropic Messages API traffic from Claude Code to any p
 - Optional Discord or Telegram bot wrapper for remote coding sessions.
 - Optional Usage through the VSCode extension.
 - Optional voice-note transcription through local Whisper or NVIDIA NIM.
+- Optional earnings from text ads via [Kickbacks.ai](https://kickbacks.ai) while Claude Code is thinking.
 - Local **Admin UI** at `/admin` to edit supported proxy settings, validate changes, and check providers (loopback access only).
 
 ## Quick Start
@@ -437,6 +438,40 @@ Windows PowerShell:
 Restart `fcc-server` after reinstalling.
 
 In the **Admin UI**, open **Messaging** and scroll to **Voice**. Turn on **Voice Notes**, choose **Whisper Device** (`cpu`, `cuda`, or `nvidia_nim`), set **Whisper Model**, and enter **Hugging Face Token** when your setup needs it. For **nvidia_nim** transcription, install the `voice` extra and set **NVIDIA NIM API Key** on the **Providers** view. The screenshot above shows the **Voice** block in the same view.
+
+### 3. Kickbacks.ai - Text Ads While Claude Thinks
+
+[Kickbacks.ai](https://kickbacks.ai) is a companion layer for Claude Code users. It replaces the idle “thinking…” spinner line with clickable text ads and credits your account a share of the impression and click revenue while requests are in-flight. It does not read code, prompts, completions, or chat content.
+
+**Install**
+```bash
+# VS Code extension — install from marketplace
+code --install-extension kickbacksai.kickbacks-ai@latest
+# Or use the VS Code command: Extensions → Search: Kickbacks.ai → Install
+```
+
+**How it integrates with Free Claude Code**
+- `fcc-server` handles model routing and API traffic.
+- `fcc-claude` leaves Claude Code’s thinking UI untouched; Kickbacks.ai patches the Claude Code webview or CLI spinner during idle states only.
+- Earnings are tracked per viewable impression and click; the extension handles its own loopback ping endpoint and status-line refresh. No changes to Free Claude Code’s proxy config are required.
+
+**Setup**
+1. Start the proxy: `fcc-server` in one terminal.
+2. Launch Claude Code: `fcc-claude` in another terminal or via the VS Code extension configured to route through `http://localhost:8082`.
+3. In VS Code, open the **Command Palette** and run `Kickbacks: Sign in`, then follow the Google sign-in prompt.
+4. To verify, run `Kickbacks: Diagnose` or `Kickbacks: Show status`. The test commands in the Kickbacks command palette let you fire synthetic `impression_rendered`, `view_tick`, and `click` events for local testing.
+5. Optional: in `.claude/settings.json`, you can lock the spinner verb mode on Claude Code 2.1.143+ if needed:
+   ```json
+   {
+     "spinnerVerbMode": "off",
+     "theme": "dark"
+   }
+   ```
+
+**Privacy and safety**
+- The extension never reads prompts or completions; collected telemetry is limited to anonymous device IDs, per-impression event IDs, on-screen visibility time, and contact email after sign-in.
+- IPs are stored only as salted hashes for fraud prevention.
+- All changes are reversible: run `Kickbacks: Restore Claude Code` to undo spinner or status-line modifications.
 
 ## How It Works
 
